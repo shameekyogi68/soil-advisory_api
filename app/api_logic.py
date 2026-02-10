@@ -11,35 +11,35 @@ from app.core.farmer_view import simplify_advisory
 # Initialize Resolver (relies on default path logic in GPSResolver)
 resolver = GPSResolver()
 
+
 def generate_physical_advice(profile: Dict) -> Dict:
     """
     Generates advice on Moisture, Drainage, and Erosion based on soil physics.
     """
     texture = profile.get("texture", "lateritic")
     topo = profile.get("topography", "Upland")
-    depth = profile.get("depth_class", "0-25")
     
     advice = {
-        "moisture": "Moderate retention.",
-        "drainage": "Well drained.",
-        "erosion": "Low risk.",
-        "suitability": "Suitable for most crops."
+        "moisture": {"en": "Moderate retention.", "kn": "ಮಧ್ಯಮ ತೇವಾಂಶ ಧಾರಣ."},
+        "drainage": {"en": "Well drained.", "kn": "ಉತ್ತಮ ಬಸಿಯುವಿಕೆ."},
+        "erosion": {"en": "Low risk.", "kn": "ಕಡಿಮೆ ಸವೆತ."},
+        "suitability": {"en": "Suitable for most crops.", "kn": "ಹೆಚ್ಚಿನ ಬೆಳೆಗಳಿಗೆ ಸೂಕ್ತ."}
     }
     
     # 1. Texture Rules
     if texture == "sandy":
-        advice["moisture"] = "⚠️ Low water holding. Irrigate frequently."
-        advice["drainage"] = "Excessive drainage. Nutrients leach easily."
+        advice["moisture"] = {"en": "⚠️ Low water holding. Irrigate frequently.", "kn": "⚠️ ಕಡಿಮೆ ತೇವಾಂಶ. ಆಗಾಗ್ಗೆ ನೀರು ಹಾಯಿಸಿ."}
+        advice["drainage"] = {"en": "Excessive drainage. Nutrients leach easily.", "kn": "ಅತಿಯಾದ ಬಸಿಯುವಿಕೆ. ಪೋಷಕಾಂಶ ನಷ್ಟವಾಗಬಹುದು."}
     elif texture == "clay_loam":
-        advice["moisture"] = "✅ High water retention."
-        advice["drainage"] = "⚠️ Slow drainage. Risk of waterlogging."
+        advice["moisture"] = {"en": "✅ High water retention.", "kn": "✅ ಉತ್ತಮ ತೇವಾಂಶ ಧಾರಣ."}
+        advice["drainage"] = {"en": "⚠️ Slow drainage. Risk of waterlogging.", "kn": "⚠️ ನಿಧಾನ ಬಸಿಯುವಿಕೆ. ನೀರು ನಿಲ್ಲುವ ಸಾಧ್ಯತೆ."}
     
     # 2. Topography Rules
     if topo == "Upland":
-        advice["erosion"] = "⚠️ High erosion risk. Use contour bunds/vegetative barriers."
+        advice["erosion"] = {"en": "⚠️ High erosion risk. Use contour bunds.", "kn": "⚠️ ಮಣ್ಣು ಸವೆತದ ಅಪಾಯ. ಬದುಗಳನ್ನು ನಿರ್ಮಿಸಿ."}
     elif topo == "Lowland":
-        advice["drainage"] = "⚠️ Risk of water stagnation. Ensure drainage channels."
-        advice["erosion"] = "Low risk (Deposition zone)."
+        advice["drainage"] = {"en": "⚠️ Risk of water stagnation. Ensure drainage.", "kn": "⚠️ ನೀರು ನಿಲ್ಲುವ ಅಪಾಯ. ಬಸಿಯುವಿಕೆ ವ್ಯವಸ್ಥೆ ಮಾಡಿ."}
+        advice["erosion"] = {"en": "Low risk (Deposition zone).", "kn": "ಕಡಿಮೆ ಸವೆತ."}
         
     return advice
 
@@ -50,48 +50,54 @@ def generate_crop_suitability(profile: Dict, current_crop: str) -> Dict:
     texture = profile.get("texture", "lateritic")
     drainage = "poor" if texture == "clay_loam" else "good"
     
-    score = "High"
+    score = {"en": "High", "kn": "ಉತ್ತಮ"}
     warnings = []
     
     # Paddle Rule
     if current_crop.lower() == "paddy":
         if texture == "sandy":
-            score = "Medium"
-            warnings.append("⚠️ Sandy soil loses water fast. Puddling is difficult.")
+            score = {"en": "Medium", "kn": "ಮಧ್ಯಮ"}
+            warnings.append({"en": "⚠️ Sandy soil loses water fast.", "kn": "⚠️ ಮರಳು ಮಿಶ್ರಿತ ಮಣ್ಣಿನಲ್ಲಿ ನೀರು ನಿಲ್ಲುವುದಿಲ್ಲ."})
         elif texture == "clay_loam":
-            score = "Excellent"
+            score = {"en": "Excellent", "kn": "ಅತ್ಯುತ್ತಮ"}
             
     # Arecanut/Coconut Rule
     elif current_crop.lower() in ["arecanut", "coconut"]:
         if drainage == "poor":
-            score = "Low"
-            warnings.append("⚠️ Risk of root rot due to poor drainage.")
+            score = {"en": "Low", "kn": "ಕಡಿಮೆ"}
+            warnings.append({"en": "⚠️ Risk of root rot due to poor drainage.", "kn": "⚠️ ನೀರು ನಿಲ್ಲುವುದರಿಂದ ಬೇರು ಕೊಳೆ ರೋಗದ ಅಪಾಯ."})
             
     return {
         "score": score,
         "warnings": warnings
     }
 
-def generate_management_tips(sowing_date: str) -> List[str]:
+def generate_management_tips(sowing_date: str) -> List[Dict[str, str]]:
     """
     Generates seasonal soil management tips.
     """
-    # Simply heuristic: If sowing date is close, give pre-sowing tips
-    tips = [
-        "🚜 Pre-Sowing: Plough 15cm deep to break hard pans.",
-        "🌿 Organic: Apply Green Manure (Daincha) 2 weeks before planting.",
-        "💧 Post-Harvest: Retain stubble to improve soil carbon."
+    return [
+        {
+            "en": "🚜 Pre-Sowing: Plough 15cm deep to break hard pans.",
+            "kn": "🚜 ಬಿತ್ತನೆಗೆ ಮುನ್ನ: ಗಟ್ಟಿಯಾದ ಮಣ್ಣನ್ನು ಒಡೆಯಲು 15 ಸೆಂ.ಮೀ ಆಳವಾಗಿ ಉಳಿಮೆ ಮಾಡಿ."
+        },
+        {
+            "en": "🌿 Organic: Apply Green Manure (Daincha) 2 weeks before planting.",
+            "kn": "🌿 ಸಾವಯವ: ಬಿತ್ತನೆಗೆ 2 ವಾರಗಳ ಮೊದಲು ಹಸಿರೆಲೆ ಗೊಬ್ಬರ ಹಾಕಿ."
+        },
+        {
+            "en": "💧 Post-Harvest: Retain stubble to improve soil carbon.",
+            "kn": "💧 ಕಟಾವಿನ ನಂತರ: ಮಣ್ಣಿನ ಇಂಗಾಲ ಹೆಚ್ಚಿಸಲು ಕೂಳೆಗಳನ್ನು ಉಳಿಸಿ."
+        }
     ]
-    return tips
 
 def _get_status(val: Any, nutrient: str) -> str:
-    # Simple helper to convert numeric to low/medium/high
+    # Helper remains same, output is localized in process_request
     try:
         val = float(val)
     except (ValueError, TypeError):
-        return "medium" # Default fallback
+        return "medium"
         
-    # Thresholds adapted from STCR standards
     if nutrient == "n":
         return "low" if val < 280 else "high" if val > 560 else "medium"
     elif nutrient == "p":
@@ -112,11 +118,11 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
     lat = request_json.get("lat")
     lon = request_json.get("lon")
     
-    # 2. Determine Data Source (Lab vs GPS)
+    # 2. Determine Data Source
     used_gps_mode = False
     
     if "ph" in request_json and "nitrogen_kg_ha" in request_json:
-        # A. PRECISION MODE (Lab Data)
+        # A. PRECISION MODE
         try:
             ph = float(request_json["ph"])
             n_status = _get_status(request_json["nitrogen_kg_ha"], "n")
@@ -125,17 +131,18 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
             soil_type = request_json.get("texture", "lateritic")
             zinc_val = float(request_json.get("zinc_ppm", 0.5))
             
-            # Micros for Lab Mode (Defaults if not provided)
             fe_status = "Sufficient" 
             mn_status = "Sufficient"
             b_status = "Unknown"
             s_status = "Unknown"
             
+            profile = {"taluk": "Lab", "zone": "User", "topography": "User"} # Dummy for logic
+            
         except (ValueError, TypeError):
              return {"error": "Invalid numeric values in Soil Data"}
     
     elif lat is not None and lon is not None:
-        # B. GPS MODE (Zonal Average)
+        # B. GPS MODE
         used_gps_mode = True
         try:
             lat = float(lat)
@@ -154,7 +161,6 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
         k_status = profile["k"]
         soil_type = profile["texture"]
         
-        # Micro-Nutient Heuristics
         fe_status = "Sufficient"
         mn_status = "Sufficient"
         b_status = "Deficient" if crop.lower() in ["arecanut", "coconut"] else "Sufficient"
@@ -164,12 +170,9 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
         return {"error": "Missing Soil Data or GPS Coordinates"}
 
     # 3. Run Scientific Models
-    
-    # Lime
     lime_result = calculate_lime(ph, 6.0, soil_type)
     lime_t_ha = lime_result.lime_required_t_ha 
     
-    # NPK (STCR)
     target_yield = 5.0 if crop.lower() == "paddy" else 2.5
     
     stcr_result = calculate_fertilizer(
@@ -198,7 +201,7 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
         zinc_kg=25 if zinc_val < 0.6 else 0,
         lime_t_ha=lime_t_ha,
         splits=stcr_result.splits,
-        raw_warnings=[f"GPS Mode: Used average data for {profile['taluk']}" if used_gps_mode else "Precise Lab Mode"],
+        raw_warnings=[f"GPS Mode used for {profile['taluk']}" if used_gps_mode else "Lab Mode"],
         weather_forecast_mm=float(request_json.get("rain_forecast_mm", 0.0) or 0.0),
         manure_type=request_json.get("manure_type"),
         manure_tons=manure_tons
@@ -211,44 +214,69 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
     
     # 6. Format Response
     
+    # Translation Helpers
+    def localize(val: str) -> Dict[str, str]:
+        # Simple mapping for status values
+        mappings = {
+            "low": {"en": "Low", "kn": "ಕಡಿಮೆ"},
+            "medium": {"en": "Medium", "kn": "ಮಧ್ಯಮ"},
+            "high": {"en": "High", "kn": "ಹೆಚ್ಚು"},
+            "acidic": {"en": "Acidic", "kn": "ಆಮ್ಲೀಯ"},
+            "neutral": {"en": "Neutral", "kn": "ತಟಸ್ಥ"},
+            "alkaline": {"en": "Alkaline", "kn": "ಕ್ಷಾರೀಯ"},
+            "sandy": {"en": "Sandy", "kn": "ಮರಳು ಮಿಶ್ರಿತ"},
+            "clay_loam": {"en": "Clay Loam", "kn": "ಜೇಡಿ ಮಣ್ಣು"},
+            "lateritic": {"en": "Lateritic", "kn": "ಕೆಂಪು ಮಣ್ಣು"},
+            "Deficient": {"en": "Deficient", "kn": "ಕೊರತೆ ಇದೆ"},
+            "Sufficient": {"en": "Sufficient", "kn": "ಸಾಕಷ್ಟು ಇದೆ"},
+            "Unknown": {"en": "Unknown", "kn": "ಗೊತ್ತಿಲ್ಲ"}
+        }
+        return mappings.get(val, {"en": val, "kn": val})
+
     response = {
         "status": "success",
         "meta": {
             "mode": "GPS Zone" if used_gps_mode else "Lab Report",
             "region": profile["taluk"] if used_gps_mode else "User Field",
-            "zone": profile.get("zone", "Unknown") if used_gps_mode else "Field Specific",
-            "topography": profile.get("topography", "Unknown") if used_gps_mode else "User Input",
+            "zone": profile.get("zone", "Unknown"),
+            "topography": profile.get("topography", "Unknown"),
             "crop": crop,
             "soil_profile": {
-                "nitrogen": n_status,
-                "phosphorus": p_status,
-                "potassium": k_status,
-                "zinc": "Deficient" if zinc_val < 0.6 else "Sufficient",
-                "iron": fe_status,
-                "boron": b_status,
-                "sulphur": s_status,
-                "ph_status": "acidic" if ph < 6.0 else "neutral",
+                "nitrogen": localize(n_status),
+                "phosphorus": localize(p_status),
+                "potassium": localize(k_status),
+                "zinc": localize("Deficient" if zinc_val < 0.6 else "Sufficient"),
+                "iron": localize(fe_status),
+                "boron": localize(b_status),
+                "sulphur": localize(s_status),
+                "ph_status": localize("acidic" if ph < 6.0 else "neutral"),
                 "ph_value": ph,
-                "type": soil_type 
+                "type": localize(soil_type) 
             }
         },
         "advisory": {
             "summary_card": [
-                {"label": "Soil Health", "value": advisory.soil_health_card[0]},
-                {"label": "Suitability", "value": suitability["score"]}
+                {"label": {"en": "Soil Health", "kn": "ಮಣ್ಣಿನ ಆರೋಗ್ಯ"}, "value": advisory.soil_health_card[0]},
+                {"label": {"en": "Sowing Date", "kn": "ಬಿತ್ತನೆ ದಿನಾಂಕ"}, "value": advisory.soil_health_card[1]}
             ],
+            "suitability": {
+                "score": suitability["score"],
+                "warnings": suitability["warnings"]
+            },
             "soil_health_checklist": {
                 "moisture": physical_tips["moisture"],
                 "drainage": physical_tips["drainage"],
-                "erosion": physical_tips["erosion"],
-                "crop_suitability": f"{suitability['score']} - {', '.join(suitability['warnings'])}" if suitability['warnings'] else f"{suitability['score']} for {crop}"
+                "erosion": physical_tips["erosion"]
             },
             "management_tips": mgmt_tips,
 
             "shopping_list": [
                 {
-                    "name": item.product_local,
-                    "qty_display": f"{item.bags} Bags + {item.loose_kg:.1f} kg" if item.bags > 0 else f"{item.loose_kg:.1f} kg (Loose)",
+                    "name": {"en": item.product_en, "kn": item.product_kn},
+                    "qty_display": {
+                        "en": f"{item.bags} Bags + {item.loose_kg:.1f} kg" if item.bags > 0 else f"{item.loose_kg:.1f} kg (Loose)",
+                        "kn": f"{item.bags} ಬ್ಯಾಗ್ + {item.loose_kg:.1f} ಕೆ.ಜಿ" if item.bags > 0 else f"{item.loose_kg:.1f} ಕೆ.ಜಿ (ಬಿಡಿ)"
+                    },
                     "bags": item.bags,
                     "loose_kg": item.loose_kg
                 } for item in advisory.shopping_list
@@ -256,8 +284,12 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
             "schedule": [
                 {
                     "date": s.date_range,
-                    "activity": s.stage_kannada,
-                    "products": s.products
+                    "activity": {"en": s.stage_name, "kn": s.stage_kannada},
+                    "products": {
+                        "en": s.products_en,
+                        "kn": s.products_kn
+                    },
+                    "instructions": s.instructions
                 } for s in advisory.schedule
             ],
             "substitutes": advisory.substitutes,

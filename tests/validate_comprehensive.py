@@ -18,7 +18,7 @@ TEST_CASES = [
     {
         "name": "Midland Lowland (Swarna River)",
         "input": {"lat": 13.36, "lon": 74.78, "crop": "Arecanut", "sowing_date": "2026-06-01"},
-        "expected": {"zone": "midland", "topography": "Lowland", "type": "clay_loam", "n": "medium"}  # Lateritic -> Clay Loam
+        "expected": {"zone": "midland", "topography": "Lowland", "type": "clay loam", "n": "medium"}  # Display name
     },
     {
         "name": "Midland Upland (Rocky)",
@@ -28,7 +28,7 @@ TEST_CASES = [
     {
         "name": "Ghats Forest (Hebri)",
         "input": {"lat": 13.45, "lon": 75.05, "crop": "Paddy", "sowing_date": "2026-06-01"},
-        "expected": {"zone": "ghats", "topography": "Upland", "type": "clay_loam", "ph_status": "acidic"}
+        "expected": {"zone": "ghats", "topography": "Upland", "type": "clay loam", "ph_status": "acidic"}
     }
 ]
 
@@ -44,18 +44,36 @@ for test in TEST_CASES:
     exp = test["expected"]
     passed = True
     
-    if meta["zone"] != exp["zone"]: passed = False
-    if meta["topography"] != exp["topography"]: passed = False
-    if profile["type"] != exp["type"]: passed = False
-    if "ph_status" in exp and profile["ph_status"] != exp["ph_status"]: passed = False
+    # Helper to get EN value safely
+    def get_en(val):
+        if isinstance(val, dict): return val.get("en", "").lower()
+        return str(val).lower()
     
+    zone_val = res["meta"]["zone"] # Zone is still string
+    topo_val = res["meta"]["topography"] # Topo is still string
+    
+    type_val = get_en(profile["type"])
+    ph_val = get_en(profile["ph_status"])
+    
+    if zone_val != exp["zone"]: 
+        passed = False
+        print(f"   🔴 Zone Mismatch: Got {zone_val}, Exp {exp['zone']}")
+        
+    if topo_val != exp["topography"]: 
+        passed = False
+        print(f"   🔴 Topo Mismatch: Got {topo_val}, Exp {exp['topography']}")
+        
+    if type_val != exp["type"].lower(): 
+        passed = False
+        print(f"   🔴 Type Mismatch: Got {type_val}, Exp {exp['type']}")
+        
+    if "ph_status" in exp:
+        if ph_val != exp["ph_status"].lower(): 
+            passed = False
+            print(f"   🔴 pH Mismatch: Got {ph_val}, Exp {exp['ph_status']}")
+            
     status_icon = "✅ PASS" if passed else "❌ FAIL"
     
-    print(f"{test['name']:<30} | {meta['zone']:<10} | {meta['topography']:<10} | {profile['type']:<10} | {profile['ph_status']:<8} | {status_icon}")
-    
-    if not passed:
-        print(f"   🔴 Got: Zone={meta['zone']}, Topo={meta['topography']}, Type={profile['type']}, pH={profile['ph_status']}")
-        print(f"   🟢 Exp: {json.dumps(exp)}")
-
+    print(f"{test['name']:<30} | {zone_val:<10} | {topo_val:<10} | {type_val:<10} | {ph_val:<8} | {status_icon}")
 print("-" * 90)
 print("Validation Complete.")
