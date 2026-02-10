@@ -212,6 +212,14 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
     suitability = generate_crop_suitability(profile if used_gps_mode else request_json, crop)
     mgmt_tips = generate_management_tips(sowing_date)
     
+    # NEW: Quick Decisions
+    from app.core.farmer_view import generate_quick_decisions
+    soil_moisture_status = physical_tips["moisture"].get("en", "")
+    quick_decisions = generate_quick_decisions(
+        float(request_json.get("rain_forecast_mm", 0.0) or 0.0),
+        soil_moisture_status
+    )
+
     # 6. Format Response
     
     # Translation Helpers
@@ -255,21 +263,27 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
             }
         },
         "advisory": {
+            # New Sections
+            "quick_decisions": quick_decisions,
+            
+            "water_insights": {
+                "drainage_status": physical_tips["drainage"],
+                "moisture_status": physical_tips["moisture"],
+                "source_advice": {"en": "Check groundwater levels.", "kn": "ಅಂತರ್ಜಲ ಮಟ್ಟ ಪರಿಶೀಲಿಸಿ."}
+            },
+            
+            "crop_advice": {
+                "suitability": suitability["score"],
+                "warnings": suitability["warnings"],
+                "season_tips": mgmt_tips
+            },
+
+            # Existing Sections
             "summary_card": [
                 {"label": {"en": "Soil Health", "kn": "ಮಣ್ಣಿನ ಆರೋಗ್ಯ"}, "value": advisory.soil_health_card[0]},
                 {"label": {"en": "Sowing Date", "kn": "ಬಿತ್ತನೆ ದಿನಾಂಕ"}, "value": advisory.soil_health_card[1]}
             ],
-            "suitability": {
-                "score": suitability["score"],
-                "warnings": suitability["warnings"]
-            },
-            "soil_health_checklist": {
-                "moisture": physical_tips["moisture"],
-                "drainage": physical_tips["drainage"],
-                "erosion": physical_tips["erosion"]
-            },
-            "management_tips": mgmt_tips,
-
+            
             "shopping_list": [
                 {
                     "name": {"en": item.product_en, "kn": item.product_kn},

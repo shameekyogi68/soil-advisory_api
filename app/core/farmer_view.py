@@ -13,7 +13,7 @@ Includes:
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Union
+from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta
 
 # =============================================================================
@@ -482,7 +482,60 @@ def simplify_advisory(
         voice_script="",
         manure_credit_msg=manure_msg
     )
+    # Generate Script
+    partial_advisory.voice_script = generate_voice_script(partial_advisory)
+    
+    return partial_advisory
 
+def generate_quick_decisions(forecast_mm: float, soil_moisture: str) -> Dict[str, Any]:
+    """
+    Generate YES/NO decisions based on weather/soil.
+    """
+    # Logic
+    can_irrigate = True
+    can_fertilize = True
+    can_spray = True
+    
+    irrigate_reason = {"en": "Soil is dry.", "kn": "ಮಣ್ಣು ಒಣಗಿದೆ."}
+    fertilize_reason = {"en": "Weather is clear.", "kn": "ಹವಾಮಾನ ಸ್ವಚ್ಛವಾಗಿದೆ."}
+    spray_reason = {"en": "Low wind/rain.", "kn": "ಗಾಳಿ/ಮಳೆ ಕಡಿಮೆ."}
+    
+    # 1. Rain Rules
+    if forecast_mm > 5.0:
+        can_irrigate = False
+        irrigate_reason = {"en": "Rain expected.", "kn": "ಮಳೆ ಬರುವ ಸಾಧ್ಯತೆ."}
+        
+    if forecast_mm > 2.0:
+        can_spray = False
+        spray_reason = {"en": "Rain may wash off spray.", "kn": "ಮಳೆಯಿಂದ ಔಷಧಿ ಕೊಚ್ಚಿ ಹೋಗಬಹುದು."}
+        
+    if forecast_mm > 10.0:
+        can_fertilize = False
+        fertilize_reason = {"en": "Heavy rain forecast.", "kn": "ಭಾರೀ ಮಳೆ ಮುನ್ಸೂಚನೆ."}
+        
+    # 2. Soil Rules
+    if "High" in soil_moisture or "Wet" in soil_moisture:
+        can_irrigate = False
+        irrigate_reason = {"en": "Soil has enough moisture.", "kn": "ಮಣ್ಣಿನಲ್ಲಿ ಸಾಕಷ್ಟು ತೇವಾಂಶವಿದೆ."}
+
+    return {
+        "irrigation": {
+            "action": {"en": "Irrigate" if can_irrigate else "Do Not Irrigate", "kn": "ನೀರು ಹಾಯಿಸಿ" if can_irrigate else "ನೀರು ಹಾಯಿಸಬೇಡಿ"},
+            "allowed": can_irrigate,
+            "reason": irrigate_reason
+        },
+        "fertilizer": {
+            "action": {"en": "Apply Fertilizer" if can_fertilize else "Wait", "kn": "ಗೊಬ್ಬರ ಹಾಕಿ" if can_fertilize else "ಕಾಯಿರಿ"},
+            "allowed": can_fertilize,
+            "reason": fertilize_reason
+        },
+        "spray": {
+            "action": {"en": "Spray Pesticide" if can_spray else "Avoid Spraying", "kn": "ಔಷಧಿ ಸಿಂಪಡಿಸಿ" if can_spray else "ಸಿಂಪಡಣೆ ಬೇಡ"},
+            "allowed": can_spray,
+            "reason": spray_reason
+        }
+    }
+    
 # =============================================================================
 # DEMO
 # =============================================================================

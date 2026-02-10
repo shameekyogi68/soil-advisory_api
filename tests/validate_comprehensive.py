@@ -49,12 +49,22 @@ for test in TEST_CASES:
         if isinstance(val, dict): return val.get("en", "").lower()
         return str(val).lower()
     
-    zone_val = res["meta"]["zone"] # Zone is still string
-    topo_val = res["meta"]["topography"] # Topo is still string
+    zone_val = res["meta"]["zone"] 
+    topo_val = res["meta"]["topography"] 
     
     type_val = get_en(profile["type"])
     ph_val = get_en(profile["ph_status"])
     
+    # New Field Checks
+    adv = res["advisory"]
+    has_quick = "quick_decisions" in adv
+    has_water = "water_insights" in adv
+    has_crop = "crop_advice" in adv
+    
+    if not (has_quick and has_water and has_crop):
+        passed = False
+        print(f"   🔴 Missing New Sections: Quick={has_quick}, Water={has_water}, Crop={has_crop}")
+
     if zone_val != exp["zone"]: 
         passed = False
         print(f"   🔴 Zone Mismatch: Got {zone_val}, Exp {exp['zone']}")
