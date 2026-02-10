@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+import functools
 from typing import Dict, Optional, Tuple
 
 class GPSResolver:
@@ -44,6 +45,7 @@ class GPSResolver:
         except FileNotFoundError:
             print(f"Warning: Profiles file not found at {self.profiles_file}")
 
+    @functools.lru_cache(maxsize=1024)
     def resolve_taluk(self, lat: float, lon: float) -> Optional[str]:
         """Find which taluk contains the coordinate."""
         for b in self.bounds:
@@ -64,6 +66,7 @@ class GPSResolver:
         else:
             return "midland"
 
+    @functools.lru_cache(maxsize=1024)
     def is_lowland(self, lat: float, lon: float) -> bool:
         """
         Heuristic: Locations close to major rivers are likely 'Lowland' (Gadde).

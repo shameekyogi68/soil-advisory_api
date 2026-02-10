@@ -1,8 +1,10 @@
 from flask import Flask, request, jsonify
+from flask_compress import Compress
 from app.api_logic import process_request
 import os
 
 app = Flask(__name__)
+Compress(app)
 
 @app.route('/', methods=['GET'])
 def health_check():
