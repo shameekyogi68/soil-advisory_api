@@ -55,15 +55,17 @@ for test in TEST_CASES:
     type_val = get_en(profile["type"])
     ph_val = get_en(profile["ph_status"])
     
-    # New Field Checks
+    # New Field Checks (REMOVED)
     adv = res["advisory"]
-    has_quick = "quick_decisions" in adv
-    has_water = "water_insights" in adv
-    has_crop = "crop_advice" in adv
+    # has_quick = "quick_decisions" in adv
+    # has_water = "water_insights" in adv
+    # has_crop = "crop_advice" in adv
     
-    if not (has_quick and has_water and has_crop):
+    # Check for Checklist
+    has_checklist = "soil_health_checklist" in adv
+    if not has_checklist:
         passed = False
-        print(f"   🔴 Missing New Sections: Quick={has_quick}, Water={has_water}, Crop={has_crop}")
+        print(f"   🔴 Missing Checklist")
 
     if zone_val != exp["zone"]: 
         passed = False
