@@ -461,6 +461,13 @@ def simplify_advisory(
                 "en": "⚠️ Improve drainage to avoid waterlogging.",
                 "kn": "⚠️ ಹೊಲದಲ್ಲಿ ನೀರು ನಿಲ್ಲದಂತೆ ನೋಡಿಕೊಳ್ಳಿ."
             })
+        elif "GPS Mode" in w:
+             # Extract Taluk/Region if present
+             region = w.split("for")[-1].strip() if "for" in w else ""
+             simple_warnings.append({
+                "en": w,
+                "kn": f"⚠️ GPS ವಿಧಾನ ({region} ಭಾಗದ ಸರಾಸರಿ ಮಾಹಿತಿ) ಬಳಸಲಾಗಿದೆ." if region else "⚠️ GPS ವಿಧಾನ ಬಳಸಲಾಗಿದೆ."
+             })
         else:
             simple_warnings.append({"en": w, "kn": w}) # Fallback
             
