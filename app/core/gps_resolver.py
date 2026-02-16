@@ -139,9 +139,13 @@ class GPSResolver:
         
         # 4. Apply Heuristics (The "Expert" Layer)
         if zone == "coastal":
-            texture = "sandy" 
+            # Narrow Coastal Strip Logic (< 2km from sea approx)
+            # 74.70 is approx 4-5km inland from 74.65 shoreline
+            if lon < 74.70:
+                texture = "sandy"
+            
+            # Broader Coastal Zone Effect
             ph_class = "neutral" 
-            if k == "medium": k = "low" 
             
         elif zone == "ghats":
             texture = "clay_loam" 
@@ -159,7 +163,7 @@ class GPSResolver:
             # Lowlands accumulate clay and nutrients
             if texture == "lateritic": texture = "clay_loam"
             if n == "low": n = "medium"
-            if k == "low": k = "medium"
+            # if k == "low": k = "medium"  <-- Removed per Expert Audit (Region is K deficient)
             
         return {
             "taluk": taluk,

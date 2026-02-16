@@ -298,7 +298,8 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
             "voice_script": advisory.voice_script,
             "alerts": advisory.simple_warnings,
             "savings_msg": advisory.manure_credit_msg
-        }
+        },
+        "disclaimer": "⚠️ Data based on regional averages. Actual field status may vary. Verify with Soil Health Card."
     }
     
     return response
