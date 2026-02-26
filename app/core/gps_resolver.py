@@ -110,8 +110,8 @@ class GPSResolver:
             
         return False
 
-    def get_profile(self, lat: float, lon: float, land_type_override: Optional[str] = None) -> Dict:
-        """Get refined soil profile for location."""
+    def get_profile(self, lat: float, lon: float, land_type_override: Optional[str] = None, month: int = 6) -> Dict:
+        """Get refined soil profile for location, considering seasonality."""
         taluk = self.resolve_taluk(lat, lon)
         if not taluk:
             taluk = "Udupi"
@@ -136,6 +136,7 @@ class GPSResolver:
         k = base_profile.get("potassium_class", "medium")
         ph_class = base_profile.get("ph_class", "acidic")
         texture = base_profile.get("soil_texture_class", "lateritic")
+        salinity = "Normal"
         
         # 4. Apply Heuristics (The "Expert" Layer)
         if zone == "coastal":
@@ -145,7 +146,12 @@ class GPSResolver:
                 texture = "sandy"
             
             # Broader Coastal Zone Effect
-            ph_class = "neutral" 
+            ph_class = "neutral"
+            
+            # SEASONAL SALINITY LOGIC (Pre-Monsoon: March, April, May)
+            if month in [3, 4, 5]:
+                salinity = "High"
+                ph_class = "alkaline" # Salt water intrusion raises pH
             
         elif zone == "ghats":
             texture = "clay_loam" 
@@ -173,7 +179,8 @@ class GPSResolver:
             "p": p,
             "k": k,
             "ph_class": ph_class,
-            "texture": texture
+            "texture": texture,
+            "salinity": salinity
         }
 
 # Usage Example

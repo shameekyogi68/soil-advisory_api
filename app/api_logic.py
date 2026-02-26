@@ -153,13 +153,26 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
         zinc_val = 0.5 
         
         land_type_input = request_json.get("land_type")
-        profile = resolver.get_profile(lat, lon, land_type_override=land_type_input)
+        
+        # Extract month for seasonal logic
+        try:
+            sow_dt = datetime.strptime(sowing_date, "%Y-%m-%d")
+            sow_month = sow_dt.month
+        except:
+            sow_month = datetime.now().month
+
+        profile = resolver.get_profile(lat, lon, land_type_override=land_type_input, month=sow_month)
         
         ph = 5.5 if profile["ph_class"] == "acidic" else 6.5
+        # If alkaline due to salinity
+        if profile.get("ph_class") == "alkaline":
+            ph = 7.5
+            
         n_status = profile["n"]
         p_status = profile["p"]
         k_status = profile["k"]
         soil_type = profile["texture"]
+        salinity = profile.get("salinity", "Normal")
         
         fe_status = "Sufficient"
         mn_status = "Sufficient"
@@ -249,9 +262,10 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
                 "iron": localize(fe_status),
                 "boron": localize(b_status),
                 "sulphur": localize(s_status),
-                "ph_status": localize("acidic" if ph < 6.0 else "neutral"),
+                "ph_status": localize("acidic" if ph < 6.0 else "neutral" if ph < 7.5 else "alkaline"),
                 "ph_value": ph,
-                "type": localize(soil_type) 
+                "type": localize(soil_type),
+                "salinity": localize(profile.get("salinity", "Normal"))
             }
         },
         "advisory": {
@@ -296,7 +310,10 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
             ],
             "substitutes": advisory.substitutes,
             "voice_script": advisory.voice_script,
-            "alerts": advisory.simple_warnings,
+            "alerts": advisory.simple_warnings + ([{
+                "en": "⚠️ Seasonal Salinity Warning: Saltwater intrusion likely. Flush field or use green manure.",
+                "kn": "⚠️ ಉಪ್ಪುನೀರು ನುಗ್ಗುವ ಸಾಧ್ಯತೆ: ಹಸಿರೆಲೆ ಗೊಬ್ಬರ ಬಳಸಿ ಅಥವಾ ಹೊಲಕ್ಕೆ ನೀರು ಹಾಯಿಸಿ ಹೊರಬಿಡಿ."
+            }] if profile.get("salinity") == "High" else []),
             "savings_msg": advisory.manure_credit_msg
         },
         "disclaimer": "⚠️ Data based on regional averages. Actual field status may vary. Verify with Soil Health Card."
