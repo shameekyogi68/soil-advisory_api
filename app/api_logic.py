@@ -11,6 +11,22 @@ from app.core.farmer_view import simplify_advisory
 # Initialize Resolver (relies on default path logic in GPSResolver)
 resolver = GPSResolver()
 
+def flatten_localization(data: Any, lang: str = "en") -> Any:
+    """
+    Recursively flattens dictionaries containing 'en' and 'kn' keys 
+    to return only the string for the requested language.
+    """
+    if isinstance(data, dict):
+        # If it's a localization object, return the specific language
+        if "en" in data and "kn" in data and len(data) == 2:
+            return data.get(lang, data.get("en"))
+        # Otherwise, recurse into dictionary values
+        return {k: flatten_localization(v, lang) for k, v in data.items()}
+    elif isinstance(data, list):
+        # Recurse into list elements
+        return [flatten_localization(item, lang) for item in data]
+    return data
+
 
 def generate_physical_advice(profile: Dict) -> Dict:
     """
@@ -115,8 +131,12 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
     # 1. Parse Inputs
     crop = request_json.get("crop", "Paddy")
     sowing_date = request_json.get("sowing_date", datetime.now().strftime("%Y-%m-%d"))
-    lat = request_json.get("lat")
-    lon = request_json.get("lon")
+    language = request_json.get("language", "en").lower()
+    if language not in ["en", "kn"]:
+        language = "en"
+        
+    lat = request_json.get("lat") or request_json.get("latitude")
+    lon = request_json.get("lon") or request_json.get("longitude")
     
     # 2. Determine Data Source
     used_gps_mode = False
@@ -319,7 +339,7 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
         "disclaimer": "⚠️ Data based on regional averages. Actual field status may vary. Verify with Soil Health Card."
     }
     
-    return response
+    return flatten_localization(response, language)
 
 # Test
 if __name__ == "__main__":
