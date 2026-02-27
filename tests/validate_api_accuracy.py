@@ -31,25 +31,25 @@ def run_test_case(name: str, payload: Dict[str, Any]):
         lang = payload.get("language", "en")
         
         # Spot check some known localized fields
-        soil_profile = response.get("meta", {}).get("soil_profile", {})
-        nitrogen = soil_profile.get("nitrogen")
+        nutrient_status = response.get("nutrient_status", {}).get("primary", {})
+        nitrogen = nutrient_status.get("nitrogen")
         
         if lang == "kn":
             if nitrogen not in ["ಕಡಿಮೆ", "ಮಧ್ಯಮ", "ಹೆಚ್ಚು"]:
                  print(f"❌ FAIL: Expected Kannada nitrogen status, got '{nitrogen}'")
                  return False
-            # Check a nested advisory field
-            summary_label = response.get("advisory", {}).get("summary_card", [{}])[0].get("label")
-            if summary_label != "ಮಣ್ಣಿನ ಆರೋಗ್ಯ":
-                 print(f"❌ FAIL: Expected Kannada summary label, got '{summary_label}'")
+            # Check a soil profile field
+            soil_type = response.get("soil_profile", {}).get("soil_type")
+            if soil_type not in ["ಕೆಂಪು ಮಣ್ಣು", "ಜೇಡಿ ಮಣ್ಣು", "ಮರಳು ಮಿಶ್ರಿತ"]:
+                 print(f"❌ FAIL: Expected Kannada soil type, got '{soil_type}'")
                  return False
         else:
             if nitrogen not in ["Low", "Medium", "High"]:
                  print(f"❌ FAIL: Expected English nitrogen status, got '{nitrogen}'")
                  return False
-            summary_label = response.get("advisory", {}).get("summary_card", [{}])[0].get("label")
-            if summary_label != "Soil Health":
-                 print(f"❌ FAIL: Expected English summary label, got '{summary_label}'")
+            soil_type = response.get("soil_profile", {}).get("soil_type")
+            if soil_type not in ["Lateritic", "Clay Loam", "Sandy"]:
+                 print(f"❌ FAIL: Expected English soil type, got '{soil_type}'")
                  return False
 
         print("✅ PASS: No leaks and strings localized correctly.")

@@ -124,13 +124,12 @@ def _get_status(val: Any, nutrient: str) -> str:
 
 def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Main Entry Point for Flutter App.
-    Accepts JSON input, returns JSON advisory.
+    Main Entry Point for Soil Health and Correction Intelligence.
+    Returns structured soil intelligence in English/Kannada.
     """
     
     # 1. Parse Inputs
     crop = request_json.get("crop", "Paddy")
-    sowing_date = request_json.get("sowing_date", datetime.now().strftime("%Y-%m-%d"))
     language = request_json.get("language", "en").lower()
     if language not in ["en", "kn"]:
         language = "en"
@@ -139,16 +138,15 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
     lon = request_json.get("lon") or request_json.get("longitude")
     
     # 2. Determine Data Source
-    used_gps_mode = False
-    
     if "ph" in request_json and "nitrogen_kg_ha" in request_json:
-        # A. PRECISION MODE
+        # A. PRECISION MODE (Lab)
         try:
             ph = float(request_json["ph"])
             n_status = _get_status(request_json["nitrogen_kg_ha"], "n")
             p_status = _get_status(request_json["phosphorus_kg_ha"], "p")
             k_status = _get_status(request_json["potassium_kg_ha"], "k")
             soil_type = request_json.get("texture", "lateritic")
+            oc_status = request_json.get("organic_carbon", "medium")
             zinc_val = float(request_json.get("zinc_ppm", 0.5))
             
             fe_status = "Sufficient" 
@@ -156,14 +154,13 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
             b_status = "Unknown"
             s_status = "Unknown"
             
-            profile = {"taluk": "Lab", "zone": "User", "topography": "User"} # Dummy for logic
+            profile = {"taluk": "Lab", "zone": "User", "topography": "User", "salinity": "Normal"}
             
         except (ValueError, TypeError):
              return {"error": "Invalid numeric values in Soil Data"}
     
     elif lat is not None and lon is not None:
         # B. GPS MODE
-        used_gps_mode = True
         try:
             lat = float(lat)
             lon = float(lon)
@@ -171,10 +168,9 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
             return {"error": "Invalid Latitude/Longitude"}
             
         zinc_val = 0.5 
-        
         land_type_input = request_json.get("land_type")
+        sowing_date = request_json.get("sowing_date", datetime.now().strftime("%Y-%m-%d"))
         
-        # Extract month for seasonal logic
         try:
             sow_dt = datetime.strptime(sowing_date, "%Y-%m-%d")
             sow_month = sow_dt.month
@@ -184,7 +180,6 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
         profile = resolver.get_profile(lat, lon, land_type_override=land_type_input, month=sow_month)
         
         ph = 5.5 if profile["ph_class"] == "acidic" else 6.5
-        # If alkaline due to salinity
         if profile.get("ph_class") == "alkaline":
             ph = 7.5
             
@@ -192,7 +187,7 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
         p_status = profile["p"]
         k_status = profile["k"]
         soil_type = profile["texture"]
-        salinity = profile.get("salinity", "Normal")
+        oc_status = profile.get("organic_carbon", "medium")
         
         fe_status = "Sufficient"
         mn_status = "Sufficient"
@@ -202,12 +197,11 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
     else:
         return {"error": "Missing Soil Data or GPS Coordinates"}
 
-    # 3. Run Scientific Models
-    lime_result = calculate_lime(ph, 6.0, soil_type)
+    # 3. Scientific Models
+    lime_result = calculate_lime(ph, None, soil_type)
     lime_t_ha = lime_result.lime_required_t_ha 
     
     target_yield = 5.0 if crop.lower() == "paddy" else 2.5
-    
     stcr_result = calculate_fertilizer(
         crop=crop,
         target_yield=target_yield,
@@ -217,39 +211,8 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
         soil_type=soil_type
     )
     
-    # 4. Generate Farmer Advisory
-    try:
-        manure_loads = float(request_json.get("manure_loads", 0))
-    except:
-        manure_loads = 0
-        
-    manure_tons = manure_loads * 3 
-    
-    advisory = simplify_advisory(
-        crop=crop,
-        sowing_date_str=sowing_date,
-        urea_kg=stcr_result.urea_kg,
-        dap_kg=stcr_result.dap_kg,
-        mop_kg=stcr_result.mop_kg,
-        zinc_kg=25 if zinc_val < 0.6 else 0,
-        lime_t_ha=lime_t_ha,
-        splits=stcr_result.splits,
-        raw_warnings=[f"GPS Mode used for {profile['taluk']}" if used_gps_mode else "Lab Mode"],
-        weather_forecast_mm=float(request_json.get("rain_forecast_mm", 0.0) or 0.0),
-        manure_type=request_json.get("manure_type"),
-        manure_tons=manure_tons
-    )
-    
-    # 5. Helper Funcs
-    physical_tips = generate_physical_advice(profile if used_gps_mode else request_json)
-    suitability = generate_crop_suitability(profile if used_gps_mode else request_json, crop)
-    mgmt_tips = generate_management_tips(sowing_date)
-    
-    # 6. Format Response
-    
-    # Translation Helpers
+    # 4. Translations & Mappings
     def localize(val: str) -> Dict[str, str]:
-        # Simple mapping for status values
         mappings = {
             "low": {"en": "Low", "kn": "ಕಡಿಮೆ"},
             "medium": {"en": "Medium", "kn": "ಮಧ್ಯಮ"},
@@ -262,82 +225,91 @@ def process_request(request_json: Dict[str, Any]) -> Dict[str, Any]:
             "lateritic": {"en": "Lateritic", "kn": "ಕೆಂಪು ಮಣ್ಣು"},
             "Deficient": {"en": "Deficient", "kn": "ಕೊರತೆ ಇದೆ"},
             "Sufficient": {"en": "Sufficient", "kn": "ಸಾಕಷ್ಟು ಇದೆ"},
-            "Unknown": {"en": "Unknown", "kn": "ಗೊತ್ತಿಲ್ಲ"}
+            "Unknown": {"en": "Unknown", "kn": "ಗೊತ್ತಿಲ್ಲ"},
+            "Moderate": {"en": "Moderate", "kn": "ಮಧ್ಯಮ"},
+            "Excellent": {"en": "Excellent", "kn": "ಅತ್ಯುತ್ತಮ"},
+            "Good": {"en": "Good", "kn": "ಉತ್ತಮ"}
         }
         return mappings.get(val, {"en": val, "kn": val})
 
+    whc_map = {
+        "sandy": {"en": "Low", "kn": "ಕಡಿಮೆ"},
+        "lateritic": {"en": "Medium", "kn": "ಮಧ್ಯಮ"},
+        "clay_loam": {"en": "High", "kn": "ಹೆಚ್ಚು"}
+    }
+    
+    # 5. Build Response
     response = {
         "status": "success",
-        "meta": {
-            "mode": "GPS Zone" if used_gps_mode else "Lab Report",
-            "region": profile["taluk"] if used_gps_mode else "User Field",
-            "zone": profile.get("zone", "Unknown"),
-            "topography": profile.get("topography", "Unknown"),
-            "crop": crop,
-            "soil_profile": {
+        "soil_profile": {
+            "soil_type": localize(soil_type),
+            "texture_classification": localize(soil_type),
+            "water_holding_capacity": whc_map.get(soil_type, {"en": "Medium", "kn": "ಮಧ್ಯಮ"})
+        },
+        "soil_chemical_properties": {
+            "ph_value": ph,
+            "ph_classification": localize("acidic" if ph < 6.0 else "neutral" if ph < 7.5 else "alkaline"),
+            "organic_carbon_status": localize(oc_status)
+        },
+        "nutrient_status": {
+            "primary": {
                 "nitrogen": localize(n_status),
                 "phosphorus": localize(p_status),
-                "potassium": localize(k_status),
+                "potassium": localize(k_status)
+            },
+            "secondary": {
+                "sulphur": localize(s_status)
+            },
+            "micronutrients": {
                 "zinc": localize("Deficient" if zinc_val < 0.6 else "Sufficient"),
                 "iron": localize(fe_status),
                 "boron": localize(b_status),
-                "sulphur": localize(s_status),
-                "ph_status": localize("acidic" if ph < 6.0 else "neutral" if ph < 7.5 else "alkaline"),
-                "ph_value": ph,
-                "type": localize(soil_type),
-                "salinity": localize(profile.get("salinity", "Normal"))
+                "manganese": localize(mn_status)
             }
         },
-        "advisory": {
-            "summary_card": [
-                {"label": {"en": "Soil Health", "kn": "ಮಣ್ಣಿನ ಆರೋಗ್ಯ"}, "value": advisory.soil_health_card[0]},
-                {"label": {"en": "Sowing Date", "kn": "ಬಿತ್ತನೆ ದಿನಾಂಕ"}, "value": advisory.soil_health_card[1]}
-            ],
-            
-            "soil_health_checklist": {
-                "moisture": physical_tips["moisture"],
-                "drainage": physical_tips["drainage"],
-                "erosion": physical_tips["erosion"],
-                "crop_suitability": {
-                    "score": suitability["score"],
-                    "warnings": suitability["warnings"]
+        "deficiency_report": [],
+        "soil_correction_recommendations": {
+            "recommended_fertilizer": [
+                {
+                    "name": {"en": "Urea", "kn": "ಯೂರಿಯಾ"},
+                    "quantity": {"en": f"{stcr_result.urea_kg} kg/ha", "kn": f"{stcr_result.urea_kg} ಕೆ.ಜಿ/ಹೆಕ್ಟೇರ್"},
+                    "method": {"en": "Broadcasting in split doses", "kn": "ಕಂತುಗಳಲ್ಲಿ ಮೇಲೆರಚುವುದು"}
+                },
+                {
+                    "name": {"en": "DAP", "kn": "ಡಿ.ಎ.ಪಿ"},
+                    "quantity": {"en": f"{stcr_result.dap_kg} kg/ha", "kn": f"{stcr_result.dap_kg} ಕೆ.ಜಿ/ಹೆಕ್ಟೇರ್"},
+                    "method": {"en": "Basal application at sowing", "kn": "ಬಿತ್ತನೆ ಸಮಯದಲ್ಲಿ ಅಡಿಗೊಬ್ಬರವಾಗಿ"}
+                },
+                {
+                    "name": {"en": "MOP", "kn": "ಪೊಟ್ಯಾಷ್"},
+                    "quantity": {"en": f"{stcr_result.mop_kg} kg/ha", "kn": f"{stcr_result.mop_kg} ಕೆ.ಜಿ/ಹೆಕ್ಟೇರ್"},
+                    "method": {"en": "Basal and top dressing", "kn": "ಅಡಿಗೊಬ್ಬರ ಮತ್ತು ಮೇಲುಗೊಬ್ಬರವಾಗಿ"}
                 }
+            ],
+            "recommended_organic_amendment": {
+                "type": {"en": "Farm Yard Manure (FYM)", "kn": "ಕೊಟ್ಟಿಗೆ ಗೊಬ್ಬರ"},
+                "quantity": {"en": "10-12 tons/ha", "kn": "10-12 ಟನ್/ಹೆಕ್ಟೇರ್"},
+                "method": {"en": "Incorporate during final ploughing", "kn": "ಕೊನೆಯ ಉಳಿಮೆಯ ಸಮಯದಲ್ಲಿ ಮಣ್ಣಿಗೆ ಸೇರಿಸಿ"}
             },
-            
-            "management_tips": mgmt_tips,
-
-            "shopping_list": [
-                {
-                    "name": {"en": item.product_en, "kn": item.product_kn},
-                    "qty_display": {
-                        "en": f"{item.bags} Bags + {item.loose_kg:.1f} kg" if item.bags > 0 else f"{item.loose_kg:.1f} kg (Loose)",
-                        "kn": f"{item.bags} ಬ್ಯಾಗ್ + {item.loose_kg:.1f} ಕೆ.ಜಿ" if item.bags > 0 else f"{item.loose_kg:.1f} ಕೆ.ಜಿ (ಬಿಡಿ)"
-                    },
-                    "bags": item.bags,
-                    "loose_kg": item.loose_kg
-                } for item in advisory.shopping_list
-            ],
-            "schedule": [
-                {
-                    "date": s.date_range,
-                    "activity": {"en": s.stage_name, "kn": s.stage_kannada},
-                    "products": {
-                        "en": s.products_en,
-                        "kn": s.products_kn
-                    },
-                    "instructions": s.instructions
-                } for s in advisory.schedule
-            ],
-            "substitutes": advisory.substitutes,
-            "voice_script": advisory.voice_script,
-            "alerts": advisory.simple_warnings + ([{
-                "en": "⚠️ Seasonal Salinity Warning: Saltwater intrusion likely. Flush field or use green manure.",
-                "kn": "⚠️ ಉಪ್ಪುನೀರು ನುಗ್ಗುವ ಸಾಧ್ಯತೆ: ಹಸಿರೆಲೆ ಗೊಬ್ಬರ ಬಳಸಿ ಅಥವಾ ಹೊಲಕ್ಕೆ ನೀರು ಹಾಯಿಸಿ ಹೊರಬಿಡಿ."
-            }] if profile.get("salinity") == "High" else []),
-            "savings_msg": advisory.manure_credit_msg
+            "ph_correction": {
+                "suggestion": {"en": "Apply Dolomite/Lime" if ph < 6.0 else "Not required", "kn": "ಡೋಲೋಮೈಟ್/ಸುಣ್ಣ ಬಳಸಿ" if ph < 6.0 else "ಅಗತ್ಯವಿಲ್ಲ"},
+                "quantity": {"en": f"{lime_t_ha} tons/ha", "kn": f"{lime_t_ha} ಟನ್/ಹೆಕ್ಟೇರ್"} if ph < 6.0 else {"en": "0", "kn": "0"},
+                "method": {"en": "Apply 2 weeks before sowing", "kn": "ಬಿತ್ತನೆಗೆ 2 ವಾರ ಮೊದಲು ಮಣ್ಣಿಗೆ ಸೇರಿಸಿ"}
+            }
         },
-        "disclaimer": "⚠️ Data based on regional averages. Actual field status may vary. Verify with Soil Health Card."
+        "soil_suitability_index": {
+            "score": generate_crop_suitability(profile, crop)["score"],
+            "limiting_factors": [w for w in generate_crop_suitability(profile, crop)["warnings"]]
+        }
     }
+
+    # Populate deficiency report
+    if n_status == "low": response["deficiency_report"].append({"nutrient": localize("n"), "severity": {"en": "High", "kn": "ಹೆಚ್ಚು"}})
+    if p_status == "low": response["deficiency_report"].append({"nutrient": localize("p"), "severity": {"en": "High", "kn": "ಹೆಚ್ಚು"}})
+    if k_status == "low": response["deficiency_report"].append({"nutrient": localize("k"), "severity": {"en": "High", "kn": "ಹೆಚ್ಚು"}})
+    if zinc_val < 0.6: response["deficiency_report"].append({"nutrient": localize("zinc"), "severity": {"en": "Moderate", "kn": "ಮಧ್ಯಮ"}})
+    if s_status == "Deficient": response["deficiency_report"].append({"nutrient": localize("sulphur"), "severity": {"en": "Moderate", "kn": "ಮಧ್ಯಮ"}})
+    if b_status == "Deficient": response["deficiency_report"].append({"nutrient": localize("boron"), "severity": {"en": "Moderate", "kn": "ಮಧ್ಯಮ"}})
     
     return flatten_localization(response, language)
 

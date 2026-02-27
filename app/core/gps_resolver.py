@@ -180,6 +180,7 @@ class GPSResolver:
             "k": k,
             "ph_class": ph_class,
             "texture": texture,
+            "organic_carbon": base_profile.get("organic_carbon_class", "medium"),
             "salinity": salinity
         }
 
